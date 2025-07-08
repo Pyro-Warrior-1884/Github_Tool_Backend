@@ -3,7 +3,7 @@ name: Send Submission to Backend
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   submit-changed-code:
