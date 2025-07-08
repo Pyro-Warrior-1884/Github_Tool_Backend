@@ -1,0 +1,40 @@
+name: Compile
+
+on:
+  push:
+    branches:
+      - main  # or any branch you want to monitor
+
+jobs:
+  submit-code:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Count commits
+      id: commits
+      run: echo "count=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Read and encode code file
+      id: encode
+      run: |
+        FILE="main.py"  # change this to your actual filename
+        if [ ! -f "$FILE" ]; then
+          echo "File $FILE not found!"
+          exit 1
+        fi
+        encoded=$(base64 -w 0 "$FILE")
+        echo "code=$encoded" >> $GITHUB_OUTPUT
+
+    - name: Send submission to backend
+      run: |
+        curl -X POST https://github-tool-project.onrender.com/submissions \
+        -H "Content-Type: application/json" \
+        -d '{
+          "name": "${{ github.actor }}",
+          "commitCount": ${{ steps.commits.outputs.count }},
+          "timestamp": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'",
+          "code": "${{ steps.encode.outputs.code }}"
+        }'
