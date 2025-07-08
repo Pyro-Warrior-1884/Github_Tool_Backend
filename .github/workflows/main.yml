@@ -58,7 +58,7 @@ jobs:
         echo "$JSON" | jq .
 
         for i in {1..5}; do
-          STATUS=$(curl -s -o response.txt -w "%{http_code}" -X POST https://github-tool-project.onrender.com/submissions \
+          STATUS=$(curl -s -o response.txt -w "%{http_code}" -X POST https://github-tool-project.onrender.com/webhook \
             -H "Content-Type: application/json" \
             -d "$JSON")
 
