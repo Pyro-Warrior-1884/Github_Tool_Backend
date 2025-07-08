@@ -1,40 +1,62 @@
-name: Compile
+name: Send Submission to Backend
 
 on:
   push:
     branches:
-      - main  # or any branch you want to monitor
+      - master
 
 jobs:
-  submit-code:
+  submit-changed-code:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout full history
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 2  # So HEAD~1 is available for diffing
 
-    - name: Count commits
-      id: commits
-      run: echo "count=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
-
-    - name: Read and encode code file
-      id: encode
+    - name: Extract Commit Info
+      id: meta
       run: |
-        FILE="main.py"  # change this to your actual filename
-        if [ ! -f "$FILE" ]; then
-          echo "File $FILE not found!"
-          exit 1
-        fi
-        encoded=$(base64 -w 0 "$FILE")
-        echo "code=$encoded" >> $GITHUB_OUTPUT
+        echo "COMMITTER=$(git log -1 --pretty=format:'%an')" >> $GITHUB_ENV
+        echo "COMMIT_COUNT=$(git rev-list --count HEAD)" >> $GITHUB_ENV
+
+        CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+        echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
+        echo "$CHANGED_FILES" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+    - name: Encode changed files (.py, .cpp, .java)
+      run: |
+        mkdir -p encoded
+        echo "[]" > encoded/files.json
+
+        for FILE in $CHANGED_FILES; do
+          if [[ "$FILE" == *.py || "$FILE" == *.cpp || "$FILE" == *.java ]]; then
+            if [ -f "$FILE" ]; then
+              CODE=$(base64 < "$FILE" | tr -d '\n')
+              jq --arg filename "$FILE" --arg content_b64 "$CODE" \
+                '. += [{filename: $filename, content_b64: $content_b64}]' \
+                encoded/files.json > temp.json && mv temp.json encoded/files.json
+            fi
+          fi
+        done
+
+        echo "📦 Final encoded file list:"
+        cat encoded/files.json
 
     - name: Send submission to backend
       run: |
-        curl -X POST https://github-tool-project.onrender.com/submissions \
-        -H "Content-Type: application/json" \
-        -d '{
-          "name": "${{ github.actor }}",
-          "commitCount": ${{ steps.commits.outputs.count }},
-          "timestamp": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'",
-          "code": "${{ steps.encode.outputs.code }}"
-        }'
+        JSON=$(jq -n \
+          --arg name "$COMMITTER" \
+          --arg commitCount "$COMMIT_COUNT" \
+          --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+          --argjson files "$(cat encoded/files.json)" \
+          '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: $files}')
+
+        echo "🚀 Final JSON Payload:"
+        echo "$JSON" | jq .
+
+        curl -v --fail -X POST https://github-tool-project.onrender.com/submissions \
+          -H "Content-Type: application/json" \
+          -d "$JSON"
