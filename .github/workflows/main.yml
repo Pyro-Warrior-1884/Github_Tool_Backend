@@ -13,7 +13,7 @@ jobs:
     - name: Checkout full history
       uses: actions/checkout@v3
       with:
-        fetch-depth: 2 
+        fetch-depth: 2
 
     - name: Extract Commit Info
       id: meta
@@ -26,53 +26,43 @@ jobs:
         echo "$CHANGED_FILES" >> $GITHUB_ENV
         echo "EOF" >> $GITHUB_ENV
 
-    - name: Encode changed files (.py, .cpp, .java)
+    - name: Encode the first changed code file (.py, .cpp, .java)
       run: |
         mkdir -p encoded
-        echo "[]" > encoded/files.json
+        FOUND=false
 
         for FILE in $CHANGED_FILES; do
           if [[ "$FILE" == *.py || "$FILE" == *.cpp || "$FILE" == *.java ]]; then
             if [ -f "$FILE" ]; then
               CODE=$(base64 < "$FILE" | tr -d '\n')
-              jq --arg filename "$FILE" --arg content_b64 "$CODE" \
-                '. += [{filename: $filename, content_b64: $content_b64}]' \
-                encoded/files.json > temp.json && mv temp.json encoded/files.json
+              echo "$CODE" > encoded/code.txt
+              echo "SELECTED_FILE=$FILE" >> $GITHUB_ENV
+              FOUND=true
+              break
             fi
           fi
         done
 
-        echo "📦 Final encoded file list:"
-        cat encoded/files.json
+        if [ "$FOUND" = false ]; then
+          echo "No code file found to submit."
+          exit 0
+        fi
 
-    - name: Send submission to backend with retries
+    - name: Send submission to backend
+      if: env.SELECTED_FILE != ''
       run: |
+        CODE=$(cat encoded/code.txt)
+
         JSON=$(jq -n \
           --arg name "$COMMITTER" \
           --arg commitCount "$COMMIT_COUNT" \
           --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-          --argjson files "$(cat encoded/files.json)" \
-          '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: $files}')
+          --arg code "$CODE" \
+          '{name: $name, commitCount: $commitCount, timestamp: $timestamp, code: $code}')
 
         echo "🚀 Final JSON Payload:"
         echo "$JSON" | jq .
 
-        for i in {1..5}; do
-          STATUS=$(curl -s -o response.txt -w "%{http_code}" -X POST https://github-tool-project.onrender.com/webhook \
-            -H "Content-Type: application/json" \
-            -d "$JSON")
-
-          cat response.txt
-          echo "Status: $STATUS"
-
-          if [ "$STATUS" -eq 200 ]; then
-            echo "✅ Successfully sent submission!"
-            break
-          elif [ "$STATUS" -eq 429 ]; then
-            echo "⚠️ Rate limited. Retrying in $((2**i)) seconds..."
-            sleep $((2**i))
-          else
-            echo "❌ Failed with status $STATUS"
-            exit 1
-          fi
-        done
+        curl -v --fail -X POST https://github-tool-project.onrender.com/webhook \
+          -H "Content-Type: application/json" \
+          -d "$JSON"
