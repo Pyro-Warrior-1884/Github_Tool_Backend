@@ -45,7 +45,7 @@ jobs:
         echo "📦 Final encoded file list:"
         cat encoded/files.json
 
-    - name: Send submission to backend
+    - name: Send submission to backend with retries
       run: |
         JSON=$(jq -n \
           --arg name "$COMMITTER" \
@@ -57,6 +57,22 @@ jobs:
         echo "🚀 Final JSON Payload:"
         echo "$JSON" | jq .
 
-        curl -v --fail -X POST https://github-tool-project.onrender.com/submissions \
-          -H "Content-Type: application/json" \
-          -d "$JSON"
+        for i in {1..5}; do
+          STATUS=$(curl -s -o response.txt -w "%{http_code}" -X POST https://github-tool-project.onrender.com/submissions \
+            -H "Content-Type: application/json" \
+            -d "$JSON")
+
+          cat response.txt
+          echo "Status: $STATUS"
+
+          if [ "$STATUS" -eq 200 ]; then
+            echo "✅ Successfully sent submission!"
+            break
+          elif [ "$STATUS" -eq 429 ]; then
+            echo "⚠️ Rate limited. Retrying in $((2**i)) seconds..."
+            sleep $((2**i))
+          else
+            echo "❌ Failed with status $STATUS"
+            exit 1
+          fi
+        done
