@@ -11,8 +11,9 @@ jobs:
 
     env:
       COMMITTER: ${{ github.actor }}
-      COMMIT_COUNT: ${{ github.event.commits | size }}
+      COMMIT_COUNT: ${{ github.event.commits && github.event.commits.length || 0 }}
       SELECTED_FILE: ${{ github.event.head_commit.modified[0] || github.event.head_commit.added[0] }}
+
 
     steps:
       - name: Checkout repo
