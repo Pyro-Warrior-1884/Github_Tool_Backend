@@ -34,9 +34,9 @@ jobs:
         for FILE in $CHANGED_FILES; do
           if [[ "$FILE" == *.py || "$FILE" == *.cpp || "$FILE" == *.java ]]; then
             if [ -f "$FILE" ]; then
-              CODE=$(base64 < "$FILE" | tr -d '\n')
-              echo "$CODE" > encoded/code.txt
-              echo "SELECTED_FILE=$FILE" >> $GITHUB_ENV
+              ENCODED=$(base64 < "$FILE" | tr -d '\n')
+              echo "$ENCODED" > encoded/code.txt
+              echo "$FILE" > encoded/filename.txt
               FOUND=true
               break
             fi
@@ -52,13 +52,16 @@ jobs:
       if: env.SELECTED_FILE != ''
       run: |
         CODE=$(cat encoded/code.txt)
+        FILE=$(cat encoded/filename.txt)
 
         JSON=$(jq -n \
           --arg name "$COMMITTER" \
           --arg commitCount "$COMMIT_COUNT" \
           --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-          --arg code "$CODE" \
-          '{name: $name, commitCount: $commitCount, timestamp: $timestamp, code: $code}')
+          --arg filename "$FILE" \
+          --arg content_b64 "$CODE" \
+          '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: [{ filename: $filename, content_b64: $content_b64 }]}' \
+        )
 
         echo "🚀 Final JSON Payload:"
         echo "$JSON" | jq .
