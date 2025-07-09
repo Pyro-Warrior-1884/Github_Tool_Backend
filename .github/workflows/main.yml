@@ -1,24 +1,57 @@
-- name: Send submission to backend
-  run: |
-    if [ -f encoded/code.txt ] && [ -f encoded/filename.txt ]; then
-      CODE=$(cat encoded/code.txt)
-      FILE=$(cat encoded/filename.txt)
+name: Submit code to backend
 
-      JSON=$(jq -n \
-        --arg name "$COMMITTER" \
-        --arg commitCount "$COMMIT_COUNT" \
-        --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-        --arg filename "$FILE" \
-        --arg content_b64 "$CODE" \
-        '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: [{ filename: $filename, content_b64: $content_b64 }]}' \
-      )
+on:
+  push:
+    branches:
+      - main
 
-      echo "🚀 Final JSON Payload:"
-      echo "$JSON" | jq .
+jobs:
+  send-submission:
+    runs-on: ubuntu-latest
 
-      curl -X POST https://github-tool-project.onrender.com/webhook \
-        -H "Content-Type: application/json" \
-        -d "$JSON"
-    else
-      echo "⚠️ No encoded file found. Skipping submission."
-    fi
+    env:
+      COMMITTER: ${{ github.actor }}
+      COMMIT_COUNT: ${{ github.event.commits | size }}
+      SELECTED_FILE: ${{ github.event.head_commit.modified[0] || github.event.head_commit.added[0] }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Create encoded directory
+        run: mkdir -p encoded
+
+      - name: Encode the first changed file
+        run: |
+          FILE="$SELECTED_FILE"
+          if [[ "$FILE" == *.py || "$FILE" == *.cpp || "$FILE" == *.java ]]; then
+            base64 "$FILE" > encoded/code.txt
+            echo "$FILE" > encoded/filename.txt
+          else
+            echo "⚠️ No valid file to encode."
+          fi
+
+      - name: Send submission to backend
+        run: |
+          if [ -f encoded/code.txt ] && [ -f encoded/filename.txt ]; then
+            CODE=$(cat encoded/code.txt)
+            FILE=$(cat encoded/filename.txt)
+
+            JSON=$(jq -n \
+              --arg name "$COMMITTER" \
+              --arg commitCount "$COMMIT_COUNT" \
+              --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+              --arg filename "$FILE" \
+              --arg content_b64 "$CODE" \
+              '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: [{ filename: $filename, content_b64: $content_b64 }]}' \
+            )
+
+            echo "🚀 Final JSON Payload:"
+            echo "$JSON" | jq .
+
+            curl -X POST https://github-tool-project.onrender.com/webhook \
+              -H "Content-Type: application/json" \
+              -d "$JSON"
+          else
+            echo "⚠️ Skipping submission: encoded file missing."
+          fi
