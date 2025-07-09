@@ -1,71 +1,24 @@
-name: Send Submission to Backend
+- name: Send submission to backend
+  run: |
+    if [ -f encoded/code.txt ] && [ -f encoded/filename.txt ]; then
+      CODE=$(cat encoded/code.txt)
+      FILE=$(cat encoded/filename.txt)
 
-on:
-  push:
-    branches:
-      - main
+      JSON=$(jq -n \
+        --arg name "$COMMITTER" \
+        --arg commitCount "$COMMIT_COUNT" \
+        --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --arg filename "$FILE" \
+        --arg content_b64 "$CODE" \
+        '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: [{ filename: $filename, content_b64: $content_b64 }]}' \
+      )
 
-jobs:
-  submit-changed-code:
-    runs-on: ubuntu-latest
+      echo "🚀 Final JSON Payload:"
+      echo "$JSON" | jq .
 
-    steps:
-    - name: Checkout full history
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 2
-
-    - name: Extract Commit Info
-      id: meta
-      run: |
-        echo "COMMITTER=$(git log -1 --pretty=format:'%an')" >> $GITHUB_ENV
-        echo "COMMIT_COUNT=$(git rev-list --count HEAD)" >> $GITHUB_ENV
-
-        CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-        echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
-        echo "$CHANGED_FILES" >> $GITHUB_ENV
-        echo "EOF" >> $GITHUB_ENV
-
-    - name: Encode the first changed code file (.py, .cpp, .java)
-      run: |
-        mkdir -p encoded
-        FOUND=false
-
-        for FILE in $CHANGED_FILES; do
-          if [[ "$FILE" == *.py || "$FILE" == *.cpp || "$FILE" == *.java ]]; then
-            if [ -f "$FILE" ]; then
-              ENCODED=$(base64 < "$FILE" | tr -d '\n')
-              echo "$ENCODED" > encoded/code.txt
-              echo "$FILE" > encoded/filename.txt
-              FOUND=true
-              break
-            fi
-          fi
-        done
-
-        if [ "$FOUND" = false ]; then
-          echo "No code file found to submit."
-          exit 0
-        fi
-
-    - name: Send submission to backend
-      if: env.SELECTED_FILE != ''
-      run: |
-        CODE=$(cat encoded/code.txt)
-        FILE=$(cat encoded/filename.txt)
-
-        JSON=$(jq -n \
-          --arg name "$COMMITTER" \
-          --arg commitCount "$COMMIT_COUNT" \
-          --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-          --arg filename "$FILE" \
-          --arg content_b64 "$CODE" \
-          '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: [{ filename: $filename, content_b64: $content_b64 }]}' \
-        )
-
-        echo "🚀 Final JSON Payload:"
-        echo "$JSON" | jq .
-
-        curl -X POST https://github-tool-project.onrender.com/webhook \
+      curl -X POST https://github-tool-project.onrender.com/webhook \
         -H "Content-Type: application/json" \
         -d "$JSON"
+    else
+      echo "⚠️ No encoded file found. Skipping submission."
+    fi
