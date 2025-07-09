@@ -17,23 +17,25 @@ jobs:
         run: mkdir -p encoded
 
       - name: Get first changed .py/.cpp/.java file
-        id: detect
         run: |
           FILE=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
           echo "Changed file: $FILE"
-          echo "FILE=$FILE" >> $GITHUB_ENV
-
-      - name: Encode the first changed file
-        if: env.FILE != ''
-        run: |
-          base64 "$FILE" > encoded/code.txt
           echo "$FILE" > encoded/filename.txt
 
+      - name: Encode the first changed file
+        run: |
+          FILENAME=$(cat encoded/filename.txt)
+          if [ -z "$FILENAME" ]; then
+            echo "No file to encode. Exiting."
+            exit 1
+          fi
+          base64 "$FILENAME" > encoded/code.txt
+
       - name: Send submission to backend
-        if: env.FILE != ''
         run: |
           CODE=$(cat encoded/code.txt)
           FILENAME=$(cat encoded/filename.txt)
+
           JSON=$(jq -n \
             --arg name "${{ github.actor }}" \
             --arg commitCount "${{ github.event.commits && github.event.commits.length || 0 }}" \
@@ -41,7 +43,7 @@ jobs:
             --arg filename "$FILENAME" \
             --arg content_b64 "$CODE" \
             '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: [{ filename: $filename, content_b64: $content_b64 }] }')
-          
+
           echo "🚀 Final Payload:"
           echo "$JSON" | jq
 
