@@ -63,6 +63,6 @@ jobs:
         echo "🚀 Final JSON Payload:"
         echo "$JSON" | jq .
 
-        curl -v --fail -X POST https://github-tool-project.onrender.com/webhook \
-          -H "Content-Type: application/json" \
-          -d "$JSON"
+        curl -X POST https://github-tool-project.onrender.com/webhook \
+        -H "Content-Type: application/json" \
+        -d "$JSON"
