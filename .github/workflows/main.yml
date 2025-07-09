@@ -13,34 +13,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Prepare folders
+      - name: Create encoded directory
         run: mkdir -p encoded
 
-      - name: Get first changed .py/.cpp/.java file
+      - name: Get changed .py/.cpp/.java file
         id: detect_file
         run: |
-          FILE=$(git diff --name-only HEAD^ HEAD | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
-          echo "Changed file: $FILE"
+          FILE=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
+          
+          if [ -z "$FILE" ]; then
+            echo "⚠️ No valid code file found in latest commit."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           echo "$FILE" > encoded/filename.txt
           echo "file=$FILE" >> $GITHUB_OUTPUT
+          echo "✅ Found changed file: $FILE"
 
-      - name: Encode the first changed file
+      - name: Encode the file
+        if: steps.detect_file.outputs.skip != 'true'
         run: |
           FILENAME=$(cat encoded/filename.txt)
-          if [ -z "$FILENAME" ] || [ ! -f "$FILENAME" ]; then
-            echo "⚠️ No valid code file to encode. Exiting."
-            exit 1
-          fi
           base64 "$FILENAME" > encoded/code.txt
+          echo "✅ File encoded"
 
       - name: Send submission to backend
+        if: steps.detect_file.outputs.skip != 'true'
         run: |
           CODE=$(cat encoded/code.txt)
           FILENAME=$(cat encoded/filename.txt)
 
           JSON=$(jq -n \
             --arg name "${{ github.actor }}" \
-            --arg commitCount "${{ github.event.commits && github.event.commits.length || 0 }}" \
+            --arg commitCount "${{ github.event.commits && github.event.commits.length || 1 }}" \
             --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
             --arg filename "$FILENAME" \
             --arg content_b64 "$CODE" \
@@ -52,4 +58,3 @@ jobs:
           curl -X POST https://github-tool-project.onrender.com/webhook \
             -H "Content-Type: application/json" \
             -d "$JSON"
-
