@@ -10,23 +10,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up environment
+      - name: Prepare folders
         run: mkdir -p encoded
 
       - name: Get first changed .py/.cpp/.java file
+        id: detect_file
         run: |
-          FILE=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
+          FILE=$(git diff --name-only HEAD^ HEAD | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
           echo "Changed file: $FILE"
           echo "$FILE" > encoded/filename.txt
+          echo "file=$FILE" >> $GITHUB_OUTPUT
 
       - name: Encode the first changed file
         run: |
           FILENAME=$(cat encoded/filename.txt)
-          if [ -z "$FILENAME" ]; then
-            echo "No file to encode. Exiting."
+          if [ -z "$FILENAME" ] || [ ! -f "$FILENAME" ]; then
+            echo "⚠️ No valid code file to encode. Exiting."
             exit 1
           fi
           base64 "$FILENAME" > encoded/code.txt
