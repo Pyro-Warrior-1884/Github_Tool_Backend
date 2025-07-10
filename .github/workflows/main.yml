@@ -19,27 +19,27 @@ jobs:
       - name: Get changed .py/.cpp/.java file
         id: detect_file
         run: |
-          FILE=$(git diff --name-only HEAD~1 HEAD | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
+          FILE=$(git diff --name-only HEAD^ HEAD | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
 
           if [ -z "$FILE" ]; then
             echo "⚠️ No valid code file found in recent commit."
-            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip=true" >> $GITHUB_ENV
             exit 0
           fi
 
           echo "$FILE" > encoded/filename.txt
-          echo "file=$FILE" >> $GITHUB_OUTPUT
+          echo "file=$FILE" >> $GITHUB_ENV
           echo "✅ Found changed file: $FILE"
 
       - name: Encode the file
-        if: steps.detect_file.outputs.skip != 'true'
+        if: env.skip != 'true'
         run: |
           FILENAME=$(cat encoded/filename.txt)
           base64 "$FILENAME" > encoded/code.txt
           echo "✅ File encoded"
 
       - name: Send submission to backend
-        if: steps.detect_file.outputs.skip != 'true'
+        if: env.skip != 'true'
         run: |
           CODE=$(cat encoded/code.txt)
           FILENAME=$(cat encoded/filename.txt)
