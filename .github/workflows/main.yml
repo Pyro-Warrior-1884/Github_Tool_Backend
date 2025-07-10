@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # ✅ Fetch full history so HEAD~1 works
 
       - name: Create encoded directory
         run: mkdir -p encoded
@@ -19,7 +21,8 @@ jobs:
       - name: Get changed .py/.cpp/.java file
         id: detect_file
         run: |
-          FILE=$(git diff --name-only HEAD^ HEAD | grep -E '\.py$|\.cpp$|\.java$' | head -n 1)
+          # ✅ Get the most recently changed .py/.cpp/.java file
+          FILE=$(git diff --name-only HEAD~1 HEAD | grep -E '\.py$|\.cpp$|\.java$' | head -n 1 || true)
 
           if [ -z "$FILE" ]; then
             echo "⚠️ No valid code file found in recent commit."
