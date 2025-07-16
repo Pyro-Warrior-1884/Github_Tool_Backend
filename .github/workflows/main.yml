@@ -50,7 +50,7 @@ jobs:
           JSON=$(jq -n \
             --arg name "${{ github.actor }}" \
             --arg commitCount "${{ github.event.commits && github.event.commits.length || 1 }}" \
-            --arg timestamp "$(TZ='Asia/Kolkata' date +'%d-%m-%Y %H:%M')" \
+            --arg timestamp "$(TZ='Asia/Kolkata' date +'%d/%m/%Y %H:%M')" \
             --arg filename "$FILENAME" \
             --arg content_b64 "$CODE" \
             '{name: $name, commitCount: $commitCount, timestamp: $timestamp, files: [{ filename: $filename, content_b64: $content_b64 }] }')
