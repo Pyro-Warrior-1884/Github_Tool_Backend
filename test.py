@@ -1,1 +1,1 @@
-print("going pyro!!
+print("going pyro!!")
