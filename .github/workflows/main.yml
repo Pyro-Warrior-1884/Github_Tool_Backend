@@ -22,7 +22,7 @@ jobs:
         id: detect_file
         run: |
           # ✅ Get the most recently changed .py/.cpp/.java file
-          FILE=$(git diff --name-only HEAD~1 HEAD | grep -E '\.py$|\.cpp$|\.java$' | head -n 1 || true)
+          FILE=$(git diff --name-only HEAD~1 HEAD | grep -E '\.py$|\.cpp$|\.java$ |\.ipynb$' | head -n 1 || true)
 
           if [ -z "$FILE" ]; then
             echo "⚠️ No valid code file found in recent commit."
